@@ -1,6 +1,8 @@
-# pi-occur
+<h1 align="center">pi-occur 🔍</h1>
 
 Emacs `occur` for the [pi](https://pi.dev) transcript. Type a query and get a list of matching paragraphs labelled by message number and kind. Move through the list to preview, press enter to jump to the selected paragraph.
+
+![pi-occur listing matches for a query, with the selected paragraph marked in the transcript](https://ndyag.github.io/pi-occur/screenshot.png)
 
 By default it searches the conversation, the text you wrote and read: your messages and the assistant's replies, without thinking, tool calls or tool output.
 
@@ -16,10 +18,12 @@ Occur: iterm
 
 ## Install
 
-```bash
-pi install ~/Develop/pi-occur     # local path, loaded in place
-# or try once:
-pi -e ~/Develop/pi-occur/src/index.ts
+```sh
+pi install npm:pi-occur
+# or try it for one run
+pi -e npm:pi-occur
+# or from a local checkout
+pi install ./pi-occur
 ```
 
 ## Use

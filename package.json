@@ -2,15 +2,24 @@
 	"name": "pi-occur",
 	"version": "0.1.0",
 	"description": "Emacs occur for the pi transcript: list matching paragraphs, jump to one",
-	"type": "module",
-	"license": "MIT",
 	"keywords": [
-		"pi-package"
+		"pi-package",
+		"pi-extension",
+		"occur",
+		"search"
+	],
+	"license": "MIT",
+	"type": "module",
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE"
 	],
 	"pi": {
 		"extensions": [
 			"./src/index.ts"
-		]
+		],
+		"image": "https://ndyag.github.io/pi-occur/screenshot.png"
 	},
 	"scripts": {
 		"check": "tsc --noEmit",
