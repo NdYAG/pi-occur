@@ -33,6 +33,8 @@ pi -e ~/Develop/pi-occur/src/index.ts
 | Conversation or all messages | `ctrl+o` (pi's `app.tools.expand` binding) |
 | Close, restore scroll position | `esc` |
 
+The window has a fixed height (12 result rows, at most 40% of the screen), so it does not move while you type; `pageUp` / `pageDown` page through longer lists.
+
 Unit and scope are remembered for the next occur, like the query.
 
 Matching is a literal substring, case-insensitive unless the query has an uppercase letter.

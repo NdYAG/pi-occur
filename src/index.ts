@@ -10,6 +10,11 @@ import { blockLabel, findTranscript, locateUnit, readTranscript, type Transcript
 // Rows of context kept above the target when jumping, so the match is not glued to the top edge.
 const CONTEXT_ROWS = 1;
 
+// The overlay has a fixed height so it does not jump while typing: 12 list rows, at most 40% of the screen.
+// A small window leaves most of the transcript visible for the preview; pageUp/pageDown page through the rest.
+const LIST_ROWS = 12;
+const MAX_SCREEN_SHARE = 0.4;
+
 /** Registers the `/occur` command and its shortcut. */
 export default function occur(pi: ExtensionAPI): void {
 	// The last query, unit and scope; the next occur starts from them.
@@ -63,7 +68,7 @@ export default function occur(pi: ExtensionAPI): void {
 					source,
 					contentWidth: () => contentWidth(tui),
 					initial: { ...last, query: query ?? last.query },
-					maxRows: () => Math.max(6, Math.floor(tui.terminal.rows * 0.45)),
+					maxRows: () => overlayRows(tui),
 					onPreview: (picked) => {
 						mark.set(picked && toTarget(picked));
 						if (picked && screen) scrollToRow(screen, picked.unit.row);
@@ -74,6 +79,7 @@ export default function occur(pi: ExtensionAPI): void {
 					},
 				});
 			},
+			// The view sizes itself from the live terminal on every render, so no maxHeight that could cut its frame.
 			{ overlay: true, overlayOptions: { anchor: "bottom-center", width: "100%" } },
 		);
 
@@ -111,6 +117,11 @@ export default function occur(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_shutdown", async () => clearLingering());
+}
+
+/** Total overlay height: frame and input (4 rows) plus the list, capped by the screen share; at least one list row. */
+function overlayRows(tui: TUI): number {
+	return Math.max(5, Math.min(LIST_ROWS + 4, Math.floor(tui.terminal.rows * MAX_SCREEN_SHARE)));
 }
 
 function toTarget(selection: OccurSelection): HighlightTarget {

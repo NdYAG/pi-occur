@@ -41,6 +41,7 @@ export interface OccurViewOptions {
 	source: TranscriptSource;
 	contentWidth: () => number;
 	initial: OccurState;
+	/** Total rows the overlay renders, frame included; the list is padded to fill them. */
 	maxRows: () => number;
 	/** Called when the selected match changes; undefined when nothing matches. */
 	onPreview: (selection: OccurSelection | undefined) => void;
@@ -128,13 +129,10 @@ export class OccurView implements Component, Focusable {
 
 		const rows = this.listRows();
 		const labelWidth = this.labelWidth();
+		// Blank rows keep the height fixed, so the frame does not move as the match count changes.
 		for (let i = 0; i < rows; i++) {
 			const match = this.matches[this.scroll + i];
-			if (!match) {
-				if (i === 0 && this.matches.length === 0) lines.push(row(""));
-				break;
-			}
-			lines.push(row(this.renderMatch(match, this.scroll + i === this.selected, inner, labelWidth)));
+			lines.push(row(match ? this.renderMatch(match, this.scroll + i === this.selected, inner, labelWidth) : ""));
 		}
 
 		const scopeKey = kb.getKeys("app.tools.expand")[0];
