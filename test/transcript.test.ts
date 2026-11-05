@@ -9,6 +9,8 @@ import {
 	splitUnits,
 	type TranscriptBlock,
 	thinkingRanges,
+	revealTop,
+	unitExtent,
 } from "../src/transcript.ts";
 
 function block(lines: string[], startRow = 10, kind: BlockKind = "assistant", thinking: Array<[number, number]> = []): TranscriptBlock {
@@ -86,5 +88,33 @@ describe("thinkingRanges", () => {
 	it("treats nothing as thinking when the structure does not add up", () => {
 		const message = new AssistantMessageComponent();
 		expect.deepEqual(thinkingRanges(message, 5, 40), []);
+	});
+});
+
+describe("unitExtent", () => {
+	const [unit] = splitUnits(block([" first line", " second foo", " third foo"], 20), "all");
+
+	it("spans the unit's rows and finds the row of the first match", () => {
+		expect.deepEqual(unitExtent(unit!, "foo"), { firstRow: 20, lastRow: 22, matchRow: 21 });
+	});
+
+	it("uses the first row when the query does not match", () => {
+		expect.equal(unitExtent(unit!, "zzz").matchRow, 20);
+	});
+});
+
+describe("revealTop", () => {
+	const extent = { firstRow: 100, lastRow: 139, matchRow: 135 };
+
+	it("shows a unit that fits from its first row, one context row above", () => {
+		expect.equal(revealTop(extent, 41), 99);
+	});
+
+	it("shows the match row of a unit taller than the visible rows", () => {
+		expect.equal(revealTop(extent, 40), 134);
+	});
+
+	it("never scrolls above the top", () => {
+		expect.equal(revealTop({ firstRow: 0, lastRow: 2, matchRow: 0 }, 10), 0);
 	});
 });

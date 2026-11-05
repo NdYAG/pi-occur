@@ -20,6 +20,7 @@ import {
 	type TUI,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import { findRanges } from "./match.ts";
 
 export type BlockKind = "user" | "assistant" | "tool" | "bash" | "custom" | "compaction" | "branch" | "skill" | "info";
 
@@ -96,6 +97,13 @@ export function readTranscript(source: TranscriptSource, width: number): Transcr
 		});
 	}
 	return blocks;
+}
+
+/** The transcript's height in rows at a width; cheap, since components return their cached lines. */
+export function transcriptHeight(source: TranscriptSource, width: number): number {
+	let rows = 0;
+	for (const component of [...source.preamble, ...source.chat.children]) rows += component.render(width).length;
+	return rows;
 }
 
 /** Rendered lines without terminal styling or trailing padding. */
@@ -212,15 +220,44 @@ function needsSpace(before: string, after: string): boolean {
 	return !(visibleWidth(last) === 2 && visibleWidth(first) === 2);
 }
 
-/** Finds the current row of a unit after the transcript may have changed (streaming output, resize). */
+/** Finds a unit again after the transcript may have changed (streaming output, resize). */
 export function locateUnit(
 	blocks: TranscriptBlock[],
 	component: Component,
 	index: number,
 	scope: Scope,
-): number | undefined {
+): TranscriptUnit | undefined {
 	const block = blocks.find((candidate) => candidate.component === component);
 	if (!block) return undefined;
 	const units = splitUnits(block, scope);
-	return (units[index] ?? units.at(-1))?.row ?? block.startRow;
+	return units[index] ?? units.at(-1);
+}
+
+/** Rows a unit occupies, and the row holding the start of its first match, both in transcript rows. */
+export interface UnitExtent {
+	firstRow: number;
+	lastRow: number;
+	matchRow: number;
+}
+
+/** Where a unit and its first match of `query` sit; the match row is the first row when nothing matches. */
+export function unitExtent(unit: TranscriptUnit, query: string): UnitExtent {
+	const firstRow = unit.row;
+	const rowOf = (span: LineSpan) => unit.block.startRow + span.line;
+	const lastRow = rowOf(unit.spans.at(-1)!);
+	const start = findRanges(unit.text, query)[0]?.[0];
+	const span = start === undefined ? undefined : unit.spans.find((candidate) => start < candidate.textEnd);
+	return { firstRow, lastRow, matchRow: span ? rowOf(span) : firstRow };
+}
+
+// Rows of context kept above the target, so it is not glued to the top edge.
+const CONTEXT_ROWS = 1;
+
+/**
+ * The scroll top that reveals a unit: its first row when the whole unit fits in the visible rows, otherwise
+ * the row of its first match, so a long code block or list still shows what was found.
+ */
+export function revealTop(extent: UnitExtent, visibleRows: number): number {
+	const fits = extent.lastRow - extent.firstRow + 1 + CONTEXT_ROWS <= visibleRows;
+	return Math.max(0, (fits ? extent.firstRow : extent.matchRow) - CONTEXT_ROWS);
 }

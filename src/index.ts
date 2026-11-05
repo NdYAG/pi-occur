@@ -5,10 +5,17 @@ import type { ExtensionAPI, ExtensionContext, KeybindingsManager, Theme } from "
 import { isKeyRelease, type Keybinding, type TUI, TuiAltScreen } from "@earendil-works/pi-tui";
 import { type HighlightTarget, TranscriptHighlight } from "./highlight.ts";
 import { type OccurSelection, type OccurState, OccurView } from "./occur-view.ts";
-import { blockLabel, findTranscript, locateUnit, readTranscript, type TranscriptSource } from "./transcript.ts";
-
-// Rows of context kept above the target when jumping, so the match is not glued to the top edge.
-const CONTEXT_ROWS = 1;
+import {
+	blockLabel,
+	findTranscript,
+	locateUnit,
+	readTranscript,
+	type TranscriptSource,
+	transcriptHeight,
+	revealTop,
+	type UnitExtent,
+	unitExtent,
+} from "./transcript.ts";
 
 // The overlay has a fixed height so it does not jump while typing: 12 list rows, at most 40% of the screen.
 // A small window leaves most of the transcript visible for the preview; pageUp/pageDown page through the rest.
@@ -71,7 +78,11 @@ export default function occur(pi: ExtensionAPI): void {
 					maxRows: () => overlayRows(tui),
 					onPreview: (picked) => {
 						mark.set(picked && toTarget(picked));
-						if (picked && screen) scrollToRow(screen, picked.unit.row);
+						if (!picked || !screen || !source) return;
+						// The overlay covers the bottom of the screen, so less of the transcript shows while it is open.
+						const height = transcriptHeight(source, contentWidth(tui));
+						const visible = Math.min(viewportHeight(screen, height), tui.terminal.rows - overlayRows(tui));
+						reveal(screen, unitExtent(picked.unit, picked.query), visible);
 					},
 					done: (picked, state) => {
 						last = state;
@@ -99,10 +110,10 @@ export default function occur(pi: ExtensionAPI): void {
 			return;
 		}
 		// Output may have streamed in or the terminal resized while the list was open; re-read before jumping.
-		const blocks = readTranscript(source, contentWidth(screen));
-		const { unit, scope } = selection;
-		const row = locateUnit(blocks, unit.block.component, unit.index, scope);
-		scrollToRow(screen, row ?? selection.unit.row);
+		const width = contentWidth(screen);
+		const { unit, scope, query: picked } = selection;
+		const current = locateUnit(readTranscript(source, width), unit.block.component, unit.index, scope) ?? unit;
+		reveal(screen, unitExtent(current, picked), viewportHeight(screen, transcriptHeight(source, width)));
 		screen.flash(`occur: ${label}`);
 	};
 
@@ -158,8 +169,18 @@ function clearOnNextKey(tui: TUI, keybindings: KeybindingsManager, clear: () => 
 	});
 }
 
-function scrollToRow(screen: TuiAltScreen, row: number): void {
-	scrollTo(screen, Math.max(0, row - CONTEXT_ROWS));
+function reveal(screen: TuiAltScreen, extent: UnitExtent, visibleRows: number): void {
+	scrollTo(screen, revealTop(extent, visibleRows));
+}
+
+/**
+ * The transcript viewport height, which pi does not expose: the scroll view stops at contentHeight - viewport,
+ * so scrolling to the bottom and reading the top gives it. A transcript shorter than the viewport cannot scroll;
+ * its own height is returned, which is enough to decide whether a unit fits.
+ */
+function viewportHeight(screen: TuiAltScreen, contentHeight: number): number {
+	screen.scrollToBottom();
+	return contentHeight - screen.viewportTop;
 }
 
 // TuiAltScreen has no absolute scrollTo; top-then-relative is exact because scrollBy counts from row 0 after it.

@@ -43,7 +43,7 @@ The selected paragraph is marked in the transcript itself: a `▌` in the left m
 ## How it works
 
 - Searches what pi has rendered, so the text matches the screen: Markdown is rendered, and collapsed tool output is not searchable until expanded with `ctrl+o`.
-- A unit is a paragraph: a run of non-blank rendered lines inside one message. Soft-wrapped lines are joined, so a query that crosses a wrap still matches. Lists, tables and code blocks have no blank lines between rows and become one paragraph.
+- A unit is a paragraph: a run of non-blank rendered lines inside one message. Soft-wrapped lines are joined, so a query that crosses a wrap still matches. Lists, tables and code blocks have no blank lines between rows and become one paragraph. Jumping shows a paragraph from its first row when it fits on screen; a paragraph taller than the screen is shown from the row of its first match instead.
 - Scopes: **conversation** searches user messages and assistant replies, including their error notices; assistant thinking is left out whether it is expanded or collapsed. **all messages** adds thinking, tool and bash executions, custom messages, skill blocks, compaction and branch summaries, and status notices.
 - `#N` counts the chat components that are messages (user, assistant, each tool call, bash, custom, summaries). Notices such as status lines have no number. It does not match `/tree` entry numbering.
 - Jumping needs `tuiMode: "fullscreen"` (pi's default). In regular mode the terminal owns the scrollback; the list still works and enter reports the message number.
