@@ -17,7 +17,7 @@ function block(lines: string[], startRow = 10, kind: BlockKind = "assistant", th
 
 describe("splitUnits", () => {
 	it("joins soft-wrapped lines into one paragraph and keeps the first row", () => {
-		const units = splitUnits(block(["", " The quick brown", " fox jumps", "", " Second para"]), "paragraph", "all");
+		const units = splitUnits(block(["", " The quick brown", " fox jumps", "", " Second para"]), "all");
 		expect.deepEqual(
 			units.map((unit) => [unit.row, unit.text]),
 			[
@@ -28,25 +28,14 @@ describe("splitUnits", () => {
 	});
 
 	it("joins wrapped CJK text without inserting spaces", () => {
-		const units = splitUnits(block(["这是一段很长的中", "文消息"]), "paragraph", "all");
+		const units = splitUnits(block(["这是一段很长的中", "文消息"]), "all");
 		expect.equal(units[0]!.text, "这是一段很长的中文消息");
 	});
 
-	it("line mode yields one unit per non-blank line", () => {
-		const units = splitUnits(block(["a", "", "b", "c"]), "line", "all");
-		expect.deepEqual(
-			units.map((unit) => [unit.index, unit.row, unit.text]),
-			[
-				[0, 10, "a"],
-				[1, 12, "b"],
-				[2, 13, "c"],
-			],
-		);
-	});
 });
 
 describe("findMatches", () => {
-	const units = splitUnits(block(["Foo bar foo", "", "nothing", "", "wrapped fo", "o here"]), "paragraph", "all");
+	const units = splitUnits(block(["Foo bar foo", "", "nothing", "", "wrapped fo", "o here"]), "all");
 
 	it("is case-insensitive for a lowercase query and finds every occurrence", () => {
 		const matches = findMatches(units, "foo");
@@ -69,7 +58,7 @@ describe("findMatches", () => {
 
 describe("scope", () => {
 	const texts = (kind: BlockKind, scope: Scope, thinking: Array<[number, number]> = []) =>
-		splitUnits(block([" think", "", " reply"], 0, kind, thinking), "paragraph", scope).map((unit) => unit.text);
+		splitUnits(block([" think", "", " reply"], 0, kind, thinking), scope).map((unit) => unit.text);
 
 	it("conversation keeps user and assistant messages and drops other kinds", () => {
 		expect.deepEqual(texts("user", "conversation"), ["think", "reply"]);

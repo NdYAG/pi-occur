@@ -17,8 +17,8 @@ const MAX_SCREEN_SHARE = 0.4;
 
 /** Registers the `/occur` command and its shortcut. */
 export default function occur(pi: ExtensionAPI): void {
-	// The last query, unit and scope; the next occur starts from them.
-	let last: OccurState = { query: "", granularity: "paragraph", scope: "conversation" };
+	// The last query and scope; the next occur starts from them.
+	let last: OccurState = { query: "", scope: "conversation" };
 	// The mark left after a jump; cleared by the next key, the next occur, or shutdown.
 	let lingering: { highlight: TranscriptHighlight; stopListening: () => void } | undefined;
 	const clearLingering = (): void => {
@@ -100,8 +100,8 @@ export default function occur(pi: ExtensionAPI): void {
 		}
 		// Output may have streamed in or the terminal resized while the list was open; re-read before jumping.
 		const blocks = readTranscript(source, contentWidth(screen));
-		const { unit, granularity, scope } = selection;
-		const row = locateUnit(blocks, unit.block.component, unit.index, granularity, scope);
+		const { unit, scope } = selection;
+		const row = locateUnit(blocks, unit.block.component, unit.index, scope);
 		scrollToRow(screen, row ?? selection.unit.row);
 		screen.flash(`occur: ${label}`);
 	};
@@ -125,8 +125,8 @@ function overlayRows(tui: TUI): number {
 }
 
 function toTarget(selection: OccurSelection): HighlightTarget {
-	const { unit, granularity, scope, query } = selection;
-	return { component: unit.block.component, kind: unit.block.kind, index: unit.index, granularity, scope, query };
+	const { unit, scope, query } = selection;
+	return { component: unit.block.component, kind: unit.block.kind, index: unit.index, scope, query };
 }
 
 function highlightStyle(theme: Theme) {

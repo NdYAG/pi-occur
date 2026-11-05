@@ -41,13 +41,10 @@ export interface TranscriptBlock {
 	thinking: Array<[number, number]>;
 }
 
-/** How a block is cut into searchable units. */
-export type Granularity = "paragraph" | "line";
-
-/** One searchable piece of a block: a paragraph (soft-wrapped lines joined) or a single rendered line. */
+/** One searchable piece of a block: a paragraph, its soft-wrapped lines joined. */
 export interface TranscriptUnit {
 	block: TranscriptBlock;
-	/** Position among the block's units at this granularity; with the component it identifies the unit across re-reads. */
+	/** Position among the block's paragraphs; with the component it identifies the unit across re-reads. */
 	index: number;
 	row: number;
 	text: string;
@@ -158,9 +155,9 @@ export function blockLabel(block: TranscriptBlock): string {
 }
 
 /** Cuts a block into units. Paragraphs are runs of non-blank lines; wrapped lines are joined into one text. */
-export function splitUnits(block: TranscriptBlock, granularity: Granularity, scope: Scope): TranscriptUnit[] {
+export function splitUnits(block: TranscriptBlock, scope: Scope): TranscriptUnit[] {
 	const lines = searchableLines(block.kind, block.lines, block.thinking, scope);
-	return splitLines(lines, granularity).map((piece, index) => ({
+	return splitLines(lines).map((piece, index) => ({
 		block,
 		index,
 		row: block.startRow + piece.spans[0]!.line,
@@ -184,8 +181,8 @@ export interface UnitPiece {
 	spans: LineSpan[];
 }
 
-/** Cuts plain (unstyled) lines into units; used both for indexing and for re-finding a unit while highlighting. */
-export function splitLines(lines: readonly string[], granularity: Granularity): UnitPiece[] {
+/** Cuts plain (unstyled) lines into paragraphs; used both for indexing and for re-finding a unit while highlighting. */
+export function splitLines(lines: readonly string[]): UnitPiece[] {
 	const pieces: UnitPiece[] = [];
 	let current: UnitPiece | undefined;
 	for (let i = 0; i < lines.length; i++) {
@@ -196,7 +193,7 @@ export function splitLines(lines: readonly string[], granularity: Granularity): 
 			continue;
 		}
 		const col = visibleWidth(raw.slice(0, raw.length - raw.trimStart().length));
-		if (!current || granularity === "line") {
+		if (!current) {
 			current = { text: "", spans: [] };
 			pieces.push(current);
 		} else if (needsSpace(current.text, trimmed)) {
@@ -220,11 +217,10 @@ export function locateUnit(
 	blocks: TranscriptBlock[],
 	component: Component,
 	index: number,
-	granularity: Granularity,
 	scope: Scope,
 ): number | undefined {
 	const block = blocks.find((candidate) => candidate.component === component);
 	if (!block) return undefined;
-	const units = splitUnits(block, granularity, scope);
+	const units = splitUnits(block, scope);
 	return (units[index] ?? units.at(-1))?.row ?? block.startRow;
 }

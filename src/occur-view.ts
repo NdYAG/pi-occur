@@ -12,7 +12,6 @@ import {
 import { findMatches, type OccurMatch } from "./match.ts";
 import {
 	blockLabel,
-	type Granularity,
 	readTranscript,
 	type Scope,
 	splitUnits,
@@ -24,7 +23,6 @@ import {
 /** The view's state worth keeping between interactions. */
 export interface OccurState {
 	query: string;
-	granularity: Granularity;
 	scope: Scope;
 }
 
@@ -55,13 +53,12 @@ const SCOPE_LABEL: Record<Scope, string> = { conversation: "conversation", all: 
 const FRAME_ROWS = 3;
 
 /**
- * Overlay component listing matches. up/down move, tab toggles paragraph/line units, the tool-expand key
- * (ctrl+o) toggles the scope between the conversation and all messages, enter jumps.
+ * Overlay component listing matching paragraphs. up/down move, the tool-expand key (ctrl+o) toggles the scope
+ * between the conversation and all messages, enter jumps.
  */
 export class OccurView implements Component, Focusable {
 	private readonly options: OccurViewOptions;
 	private readonly input = new Input({ prompt: "Occur: " });
-	private granularity: Granularity;
 	private scope: Scope;
 	private blocks: TranscriptBlock[] = [];
 	private units: TranscriptUnit[] = [];
@@ -72,7 +69,6 @@ export class OccurView implements Component, Focusable {
 
 	constructor(options: OccurViewOptions) {
 		this.options = options;
-		this.granularity = options.initial.granularity;
 		this.scope = options.initial.scope;
 		// setValue leaves the cursor at 0; a bracketed paste inserts the text and leaves the cursor after it.
 		if (options.initial.query) this.input.handleInput(`\x1b[200~${options.initial.query}\x1b[201~`);
@@ -99,12 +95,12 @@ export class OccurView implements Component, Focusable {
 		if (kb.matches(data, "tui.select.down")) return this.move(1);
 		if (kb.matches(data, "tui.select.pageUp")) return this.move(-this.listRows());
 		if (kb.matches(data, "tui.select.pageDown")) return this.move(this.listRows());
-		if (kb.matches(data, "tui.input.tab")) {
-			return this.resplit(() => (this.granularity = this.granularity === "paragraph" ? "line" : "paragraph"));
-		}
 		// pi's "show more" key: tool output there, every message kind here.
 		if (kb.matches(data, "app.tools.expand")) {
-			return this.resplit(() => (this.scope = this.scope === "conversation" ? "all" : "conversation"));
+			this.scope = this.scope === "conversation" ? "all" : "conversation";
+			this.splitAll();
+			this.refilter("keep");
+			return;
 		}
 		const before = this.input.getValue();
 		this.input.handleInput(data);
@@ -126,9 +122,8 @@ export class OccurView implements Component, Focusable {
 			lines.push(match ? this.renderMatch(match, this.scroll + i === this.selected, width, labelWidth) : "");
 		}
 
-		// Each toggle shows its key and current state, e.g. "tab (paragraph)".
 		const scopeKey = kb.getKeys("app.tools.expand")[0];
-		const hints = [`tab (${this.granularity})`];
+		const hints: string[] = [];
 		if (scopeKey) hints.push(`${scopeKey} (${SCOPE_LABEL[this.scope]})`);
 		hints.push("esc back");
 		lines.push(rule(theme.fg("dim", hints.join(" · "))));
@@ -145,15 +140,8 @@ export class OccurView implements Component, Focusable {
 		this.input.invalidate();
 	}
 
-	/** Applies a unit or scope change and keeps the selection near where it was. */
-	private resplit(change: () => void): void {
-		change();
-		this.splitAll();
-		this.refilter("keep");
-	}
-
 	private splitAll(): void {
-		this.units = this.blocks.flatMap((block) => splitUnits(block, this.granularity, this.scope));
+		this.units = this.blocks.flatMap((block) => splitUnits(block, this.scope));
 	}
 
 	/** "latest" selects the newest match (recent output is the usual target); "keep" stays near the old position. */
@@ -192,7 +180,7 @@ export class OccurView implements Component, Focusable {
 	}
 
 	private state(): OccurState {
-		return { query: this.input.getValue(), granularity: this.granularity, scope: this.scope };
+		return { query: this.input.getValue(), scope: this.scope };
 	}
 
 	private selection(): OccurSelection | undefined {

@@ -23,7 +23,7 @@ function view(chatLines: string[], overrides: Partial<OccurViewOptions> = {}): O
 		keybindings,
 		source: { preamble: [], chat },
 		contentWidth: () => 60,
-		initial: { query: "", granularity: "paragraph", scope: "all" },
+		initial: { query: "", scope: "all" },
 		maxRows: () => 8,
 		onPreview: () => {},
 		done: () => {},
@@ -46,7 +46,7 @@ describe("OccurView", () => {
 	it("puts the cursor after a prefilled query, so typing appends", () => {
 		let finalQuery = "";
 		const v = view([" foobar"], {
-			initial: { query: "foo", granularity: "paragraph", scope: "all" },
+			initial: { query: "foo", scope: "all" },
 			done: (_selection, state) => {
 				finalQuery = state.query;
 			},

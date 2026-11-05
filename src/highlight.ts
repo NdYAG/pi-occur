@@ -4,7 +4,6 @@ import { type Component, visibleWidth } from "@earendil-works/pi-tui";
 import { findRanges } from "./match.ts";
 import {
 	type BlockKind,
-	type Granularity,
 	type LineSpan,
 	plainLines,
 	type Scope,
@@ -18,7 +17,6 @@ export interface HighlightTarget {
 	component: Component;
 	kind: BlockKind;
 	index: number;
-	granularity: Granularity;
 	scope: Scope;
 	query: string;
 }
@@ -86,7 +84,7 @@ export function decorate(
 	const plain = plainLines(lines);
 	// Re-split on every render, the same way the list did: streaming output or a resize moves the unit.
 	const searchable = searchableLines(target.kind, plain, thinking, target.scope);
-	const piece = splitLines(searchable, target.granularity)[target.index];
+	const piece = splitLines(searchable)[target.index];
 	if (!piece) return lines;
 
 	const ranges = findRanges(piece.text, target.query);
