@@ -1,9 +1,17 @@
-// pi-occur: Emacs-style occur for pi's transcript. `/occur [query]` or alt+o lists matching paragraphs; enter jumps.
+// pi-occur: Emacs-style occur for pi's transcript. `/occur [query]` or the occur.open key (alt+o by default) lists
+// matching paragraphs; enter jumps.
 // By default it searches the conversation: user messages and assistant replies, without thinking or tool output.
 
-import type { ExtensionAPI, ExtensionContext, KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
+import {
+	type ExtensionAPI,
+	type ExtensionContext,
+	getAgentDir,
+	type KeybindingsManager,
+	type Theme,
+} from "@earendil-works/pi-coding-agent";
 import { isKeyRelease, type Keybinding, type TUI, TuiAltScreen } from "@earendil-works/pi-tui";
 import { type HighlightTarget, TranscriptHighlight } from "./highlight.ts";
+import { OPEN_KEYBINDING, readOpenKeys } from "./keybinding.ts";
 import { type OccurSelection, type OccurState, OccurView } from "./occur-view.ts";
 import {
 	blockLabel,
@@ -122,10 +130,20 @@ export default function occur(pi: ExtensionAPI): void {
 		handler: async (args, ctx) => run(args.trim() || undefined, ctx),
 	});
 
-	pi.registerShortcut("alt+o", {
-		description: "Occur: search the transcript",
-		handler: async (ctx) => run(undefined, ctx),
-	});
+	// Read at load, as pi reads its own bindings; `/reload` picks up an edited keybindings.json.
+	const open = readOpenKeys(getAgentDir());
+	for (const key of open.keys) {
+		pi.registerShortcut(key, {
+			description: "Occur: search the transcript",
+			handler: async (ctx) => run(undefined, ctx),
+		});
+	}
+	if (open.kind === "invalid") {
+		// Notifications need a UI, which does not exist while extensions load.
+		pi.on("session_start", async (_event, ctx) => {
+			if (ctx.hasUI) ctx.ui.notify(`occur: ${open.reason}; using ${open.keys.join(", ")} (${OPEN_KEYBINDING})`, "warning");
+		});
+	}
 
 	pi.on("session_shutdown", async () => clearLingering());
 }

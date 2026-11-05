@@ -26,11 +26,25 @@ pi -e ~/Develop/pi-occur/src/index.ts
 
 | Action | Key |
 |---|---|
-| Open | `/occur [query]` or `alt+o` (reopens with the last query) |
+| Open | `/occur [query]` or `alt+o`, the `occur.open` keybinding (reopens with the last query) |
 | Move, preview | `up` / `down`, `pageUp` / `pageDown` |
 | Jump | `enter` |
 | Conversation or all messages | `ctrl+o` (pi's `app.tools.expand` binding) |
 | Close, restore scroll position | `esc` |
+
+### Change the key
+
+Bind `occur.open` in pi's [`keybindings.json`](https://pi.dev/docs/keybindings) (`~/.pi/agent/keybindings.json`), like pi's own actions, then run `/reload`:
+
+```json
+{
+  "occur.open": "ctrl+alt+o"
+}
+```
+
+A list binds several keys, and `[]` binds none, leaving `/occur`. Without the entry the key is `alt+o`. A value pi cannot read as a key, such as `"alt+m o"` (key sequences are not supported), keeps `alt+o` and shows a warning at startup. `/hotkeys` lists the active key.
+
+### Window
 
 The window has a fixed height (12 result rows, at most 40% of the screen), so it does not move while you type; `pageUp` / `pageDown` page through longer lists.
 
@@ -56,6 +70,7 @@ Built against pi 1.5.0. It reads pi internals that are not public API:
 - message kinds are recognised by `instanceof` on pi's exported message components;
 - assistant thinking is found as the `MouseRegion` children of the message's single content container; if that structure does not add up, the whole message counts as reply;
 - the transcript content width is the terminal width, minus one column when `fullscreenScrollbar` is `"always"`;
+- `occur.open` is read from `keybindings.json` by occur itself, since pi gives extensions no keybindings reader at load time (the same approach as pi-mcp-adapter's `mcp.panel.open`); pi's keybindings schema allows extension ids;
 - the mark is drawn by shadowing `render` on the one marked component instance, which relies on pi re-rendering transcript components each frame.
 
 If the layout check fails, `/occur` reports "unsupported pi layout" instead of jumping to wrong rows.
