@@ -1,14 +1,25 @@
 // Marks the selected occur unit inside the transcript itself, by wrapping one component's render.
 
-import { type Component, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import { type Component, visibleWidth } from "@earendil-works/pi-tui";
 import { findRanges } from "./match.ts";
-import { type Granularity, type LineSpan, splitLines } from "./transcript.ts";
+import {
+	type BlockKind,
+	type Granularity,
+	type LineSpan,
+	plainLines,
+	type Scope,
+	searchableLines,
+	splitLines,
+	thinkingRanges,
+} from "./transcript.ts";
 
 /** Which unit to mark, and the query whose matches inside it are emphasised. */
 export interface HighlightTarget {
 	component: Component;
+	kind: BlockKind;
 	index: number;
 	granularity: Granularity;
+	scope: Scope;
 	query: string;
 }
 
@@ -47,7 +58,10 @@ export class TranscriptHighlight {
 		let last: { input: string[]; output: string[] } | undefined;
 		component.render = (width: number) => {
 			const input = original.call(component, width);
-			if (last?.input !== input) last = { input, output: decorate(input, target, this.style) };
+			if (last?.input !== input) {
+				const thinking = thinkingRanges(component, input.length, width);
+				last = { input, output: decorate(input, thinking, target, this.style) };
+			}
 			return last.output;
 		};
 		this.wrapped = { component, own };
@@ -63,10 +77,16 @@ export class TranscriptHighlight {
 }
 
 /** Returns new lines with the target unit marked; the component's cached array is never modified. */
-export function decorate(lines: string[], target: HighlightTarget, style: HighlightStyle): string[] {
-	const plain = lines.map((line) => stripTerminalSequences(line).trimEnd());
-	// Re-split on every render: streaming output or a resize changes where the unit sits.
-	const piece = splitLines(plain, target.granularity)[target.index];
+export function decorate(
+	lines: string[],
+	thinking: Array<[number, number]>,
+	target: HighlightTarget,
+	style: HighlightStyle,
+): string[] {
+	const plain = plainLines(lines);
+	// Re-split on every render, the same way the list did: streaming output or a resize moves the unit.
+	const searchable = searchableLines(target.kind, plain, thinking, target.scope);
+	const piece = splitLines(searchable, target.granularity)[target.index];
 	if (!piece) return lines;
 
 	const ranges = findRanges(piece.text, target.query);

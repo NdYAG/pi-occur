@@ -11,9 +11,22 @@ import {
 	ToolExecutionComponent,
 	UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
-import { type Component, Container, Spacer, stripTerminalSequences, type TUI, visibleWidth } from "@earendil-works/pi-tui";
+import {
+	type Component,
+	Container,
+	MouseRegion,
+	Spacer,
+	stripTerminalSequences,
+	type TUI,
+	visibleWidth,
+} from "@earendil-works/pi-tui";
 
 export type BlockKind = "user" | "assistant" | "tool" | "bash" | "custom" | "compaction" | "branch" | "skill" | "info";
+
+/** Which text is searched: "conversation" is what the user wrote and read (user messages, assistant replies). */
+export type Scope = "conversation" | "all";
+
+const CONVERSATION_KINDS: ReadonlySet<BlockKind> = new Set(["user", "assistant"]);
 
 /** One chat component and its rendered lines, without terminal styling. */
 export interface TranscriptBlock {
@@ -24,6 +37,8 @@ export interface TranscriptBlock {
 	/** Row of the block's first line in the transcript scroll view. */
 	startRow: number;
 	lines: string[];
+	/** [start, end) line ranges of assistant thinking, excluded from the conversation scope. */
+	thinking: Array<[number, number]>;
 }
 
 /** How a block is cut into searchable units. */
@@ -79,10 +94,50 @@ export function readTranscript(source: TranscriptSource, width: number): Transcr
 			kind,
 			messageNo: kind === "info" ? undefined : messageNo,
 			startRow,
-			lines: rendered.map((line) => stripTerminalSequences(line).trimEnd()),
+			lines: plainLines(rendered),
+			thinking: thinkingRanges(component, rendered.length, width),
 		});
 	}
 	return blocks;
+}
+
+/** Rendered lines without terminal styling or trailing padding. */
+export function plainLines(rendered: readonly string[]): string[] {
+	return rendered.map((line) => stripTerminalSequences(line).trimEnd());
+}
+
+/**
+ * Line ranges of an assistant message's thinking blocks. pi 1.5 renders an assistant message as one content
+ * container whose thinking blocks, and only those, are wrapped in a MouseRegion (click toggles them). This is
+ * pi-internal structure: if the children's lines do not add up to the message, nothing is treated as thinking.
+ */
+export function thinkingRanges(component: Component, lineCount: number, width: number): Array<[number, number]> {
+	if (!(component instanceof AssistantMessageComponent)) return [];
+	const content = component.children[0];
+	if (component.children.length !== 1 || !(content instanceof Container)) return [];
+	const ranges: Array<[number, number]> = [];
+	let line = 0;
+	for (const child of content.children) {
+		const count = child.render(width).length;
+		if (child instanceof MouseRegion && count > 0) ranges.push([line, line + count]);
+		line += count;
+	}
+	return line === lineCount ? ranges : [];
+}
+
+/** The lines occur searches in a block for a scope; excluded lines become blank so they split paragraphs too. */
+export function searchableLines(
+	kind: BlockKind,
+	lines: readonly string[],
+	thinking: Array<[number, number]>,
+	scope: Scope,
+): readonly string[] {
+	if (scope === "all") return lines;
+	if (!CONVERSATION_KINDS.has(kind)) return [];
+	if (thinking.length === 0) return lines;
+	const masked = lines.slice();
+	for (const [start, end] of thinking) masked.fill("", start, end);
+	return masked;
 }
 
 function classify(component: Component): BlockKind {
@@ -103,8 +158,9 @@ export function blockLabel(block: TranscriptBlock): string {
 }
 
 /** Cuts a block into units. Paragraphs are runs of non-blank lines; wrapped lines are joined into one text. */
-export function splitUnits(block: TranscriptBlock, granularity: Granularity): TranscriptUnit[] {
-	return splitLines(block.lines, granularity).map((piece, index) => ({
+export function splitUnits(block: TranscriptBlock, granularity: Granularity, scope: Scope): TranscriptUnit[] {
+	const lines = searchableLines(block.kind, block.lines, block.thinking, scope);
+	return splitLines(lines, granularity).map((piece, index) => ({
 		block,
 		index,
 		row: block.startRow + piece.spans[0]!.line,
@@ -165,9 +221,10 @@ export function locateUnit(
 	component: Component,
 	index: number,
 	granularity: Granularity,
+	scope: Scope,
 ): number | undefined {
 	const block = blocks.find((candidate) => candidate.component === component);
 	if (!block) return undefined;
-	const units = splitUnits(block, granularity);
+	const units = splitUnits(block, granularity, scope);
 	return (units[index] ?? units.at(-1))?.row ?? block.startRow;
 }

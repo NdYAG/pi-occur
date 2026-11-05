@@ -1,9 +1,10 @@
 // pi-occur: Emacs-style occur for pi's transcript. `/occur [query]` or alt+o lists matching paragraphs; enter jumps.
+// By default it searches the conversation: user messages and assistant replies, without thinking or tool output.
 
 import type { ExtensionAPI, ExtensionContext, KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import { isKeyRelease, type Keybinding, type TUI, TuiAltScreen } from "@earendil-works/pi-tui";
-import { TranscriptHighlight } from "./highlight.ts";
-import { OccurView, type OccurSelection } from "./occur-view.ts";
+import { type HighlightTarget, TranscriptHighlight } from "./highlight.ts";
+import { type OccurSelection, type OccurState, OccurView } from "./occur-view.ts";
 import { blockLabel, findTranscript, locateUnit, readTranscript, type TranscriptSource } from "./transcript.ts";
 
 // Rows of context kept above the target when jumping, so the match is not glued to the top edge.
@@ -11,7 +12,8 @@ const CONTEXT_ROWS = 1;
 
 /** Registers the `/occur` command and its shortcut. */
 export default function occur(pi: ExtensionAPI): void {
-	let lastQuery = "";
+	// The last query, unit and scope; the next occur starts from them.
+	let last: OccurState = { query: "", granularity: "paragraph", scope: "conversation" };
 	// The mark left after a jump; cleared by the next key, the next occur, or shutdown.
 	let lingering: { highlight: TranscriptHighlight; stopListening: () => void } | undefined;
 	const clearLingering = (): void => {
@@ -60,14 +62,14 @@ export default function occur(pi: ExtensionAPI): void {
 					keybindings,
 					source,
 					contentWidth: () => contentWidth(tui),
-					initialQuery: query ?? lastQuery,
+					initial: { ...last, query: query ?? last.query },
 					maxRows: () => Math.max(6, Math.floor(tui.terminal.rows * 0.45)),
 					onPreview: (picked) => {
 						mark.set(picked && toTarget(picked));
 						if (picked && screen) scrollToRow(screen, picked.unit.row);
 					},
-					done: (picked, finalQuery) => {
-						lastQuery = finalQuery;
+					done: (picked, state) => {
+						last = state;
 						done(picked);
 					},
 				});
@@ -92,7 +94,8 @@ export default function occur(pi: ExtensionAPI): void {
 		}
 		// Output may have streamed in or the terminal resized while the list was open; re-read before jumping.
 		const blocks = readTranscript(source, contentWidth(screen));
-		const row = locateUnit(blocks, selection.unit.block.component, selection.unit.index, selection.granularity);
+		const { unit, granularity, scope } = selection;
+		const row = locateUnit(blocks, unit.block.component, unit.index, granularity, scope);
 		scrollToRow(screen, row ?? selection.unit.row);
 		screen.flash(`occur: ${label}`);
 	};
@@ -110,9 +113,9 @@ export default function occur(pi: ExtensionAPI): void {
 	pi.on("session_shutdown", async () => clearLingering());
 }
 
-function toTarget(selection: OccurSelection) {
-	const { unit, granularity, query } = selection;
-	return { component: unit.block.component, index: unit.index, granularity, query };
+function toTarget(selection: OccurSelection): HighlightTarget {
+	const { unit, granularity, scope, query } = selection;
+	return { component: unit.block.component, kind: unit.block.kind, index: unit.index, granularity, scope, query };
 }
 
 function highlightStyle(theme: Theme) {
