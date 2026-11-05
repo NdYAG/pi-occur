@@ -11,7 +11,7 @@ Occur: iterm
 ▶ #29 assistant  …所以只能用 iTerm 的搜索。
   #305 assistant …thinking 的段落其实是 iterm 搜索结果的大头。
 
-── ctrl+o (conversation) · esc back ──────────────────────────────────
+── ctrl+o (scope: conversation) · esc (back) ─────────────────────────
 ```
 
 ## Install

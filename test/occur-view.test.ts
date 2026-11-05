@@ -8,10 +8,10 @@ import { OccurView, type OccurViewOptions } from "../src/occur-view.ts";
 const plainTheme = new Proxy({}, { get: () => (_token: string, text?: string) => text ?? _token }) as unknown as Theme;
 
 // Only the keys the tests press; enough of KeybindingsManager for the view.
-const keys: Record<string, string> = { "tui.select.down": "\x1b[B", "tui.select.up": "\x1b[A" };
+const keys: Record<string, string> = { "tui.select.down": "\x1b[B", "tui.select.up": "\x1b[A", "app.tools.expand": "\x0f" };
 const keybindings = {
 	matches: (data: string, id: string) => keys[id] === data,
-	getKeys: () => [],
+	getKeys: (id: string) => (id === "app.tools.expand" ? ["ctrl+o"] : []),
 } as unknown as KeybindingsManager;
 
 function view(chatLines: string[], overrides: Partial<OccurViewOptions> = {}): OccurView {
@@ -41,6 +41,13 @@ describe("OccurView", () => {
 			return height;
 		});
 		expect.deepEqual(heights, [8, 8, 8, 8]);
+	});
+
+	it("names the scope and its current value in the footer", () => {
+		const v = view([" alpha"], { initial: { query: "", scope: "conversation" } });
+		expect.match(v.render(60).at(-1)!, /ctrl\+o \(scope: conversation\) · esc \(back\)/);
+		v.handleInput("\x0f");
+		expect.match(v.render(60).at(-1)!, /ctrl\+o \(scope: all messages\)/);
 	});
 
 	it("puts the cursor after a prefilled query, so typing appends", () => {
