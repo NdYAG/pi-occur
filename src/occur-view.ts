@@ -71,7 +71,8 @@ export class OccurView implements Component, Focusable {
 		this.options = options;
 		this.granularity = options.initial.granularity;
 		this.scope = options.initial.scope;
-		this.input.setValue(options.initial.query);
+		// setValue leaves the cursor at 0; a bracketed paste inserts the text and leaves the cursor after it.
+		if (options.initial.query) this.input.handleInput(`\x1b[200~${options.initial.query}\x1b[201~`);
 		this.input.onSubmit = () => this.confirm();
 		this.input.onEscape = () => options.done(undefined, this.state());
 		this.blocks = readTranscript(options.source, options.contentWidth());
