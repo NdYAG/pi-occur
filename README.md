@@ -9,9 +9,9 @@ By default it searches the conversation, the text you wrote and read: your messa
 ```
 ── 2/3 matches ───────────────────────────────────────────────────────
 Occur: iterm
-  #2 user        …使用 iterm 进行搜索的话，会将 iterm 开启 TUI 之前…
-▶ #29 assistant  …所以只能用 iTerm 的搜索。
-  #305 assistant …thinking 的段落其实是 iterm 搜索结果的大头。
+  #2 user        …iterm search also finds the shell output above pi…
+▶ #29 assistant  …iTerm's Cmd+F scrolls you past the top of pi's TUI…
+  #305 assistant …so iterm search can't jump to a message in pi.
 
 ── ctrl+o (scope: conversation) · esc (back) ─────────────────────────
 ```
