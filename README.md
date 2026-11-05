@@ -32,6 +32,8 @@ pi -e ~/Develop/pi-occur/src/index.ts
 
 Matching is a literal substring, case-insensitive unless the query has an uppercase letter.
 
+The selected paragraph is marked in the transcript itself: a `▌` in the left margin of each of its lines and the matches in reverse video. The mark follows the selection while the list is open, stays after `enter` while you scroll (wheel, page and line scrolling keys), and clears on the next other key or on `esc`.
+
 ## How it works
 
 - Searches what pi has rendered, so the text matches the screen: Markdown is rendered, and collapsed tool output is not searchable until expanded with `ctrl+o`.
@@ -45,7 +47,8 @@ Built against pi 1.5.0. It reads pi internals that are not public API:
 
 - the transcript is the first child of the TUI, a container holding header, loaded resources and chat;
 - message kinds are recognised by `instanceof` on pi's exported message components;
-- the transcript content width is the terminal width, minus one column when `fullscreenScrollbar` is `"always"`.
+- the transcript content width is the terminal width, minus one column when `fullscreenScrollbar` is `"always"`;
+- the mark is drawn by shadowing `render` on the one marked component instance, which relies on pi re-rendering transcript components each frame.
 
 If the layout check fails, `/occur` reports "unsupported pi layout" instead of jumping to wrong rows.
 

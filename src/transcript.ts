@@ -36,6 +36,7 @@ export interface TranscriptUnit {
 	index: number;
 	row: number;
 	text: string;
+	spans: LineSpan[];
 }
 
 /** The containers pi renders into the transcript scroll view. */
@@ -103,42 +104,59 @@ export function blockLabel(block: TranscriptBlock): string {
 
 /** Cuts a block into units. Paragraphs are runs of non-blank lines; wrapped lines are joined into one text. */
 export function splitUnits(block: TranscriptBlock, granularity: Granularity): TranscriptUnit[] {
-	const units: TranscriptUnit[] = [];
-	let runStart = -1;
-	const flush = (end: number): void => {
-		if (runStart < 0) return;
-		const lines = block.lines.slice(runStart, end);
-		units.push({ block, index: units.length, row: block.startRow + runStart, text: joinWrapped(lines) });
-		runStart = -1;
-	};
-
-	for (let i = 0; i < block.lines.length; i++) {
-		const blank = block.lines[i]!.trim() === "";
-		if (granularity === "line") {
-			if (!blank) units.push({ block, index: units.length, row: block.startRow + i, text: block.lines[i]!.trim() });
-			continue;
-		}
-		if (blank) flush(i);
-		else if (runStart < 0) runStart = i;
-	}
-	flush(block.lines.length);
-	return units;
+	return splitLines(block.lines, granularity).map((piece, index) => ({
+		block,
+		index,
+		row: block.startRow + piece.spans[0]!.line,
+		text: piece.text,
+		spans: piece.spans,
+	}));
 }
 
-/** Joins soft-wrapped lines. Wide (CJK) text wraps without spaces, so no space is inserted between wide characters. */
-function joinWrapped(lines: string[]): string {
-	let text = "";
-	for (const raw of lines) {
-		const line = raw.trim();
-		if (!text) {
-			text = line;
+/** Where a piece of unit text sits on screen: text[textStart, textEnd) is line `line` from column `col`. */
+export interface LineSpan {
+	/** Line index within the block. */
+	line: number;
+	textStart: number;
+	textEnd: number;
+	col: number;
+}
+
+/** A unit's text and its placement, independent of the block's position in the transcript. */
+export interface UnitPiece {
+	text: string;
+	spans: LineSpan[];
+}
+
+/** Cuts plain (unstyled) lines into units; used both for indexing and for re-finding a unit while highlighting. */
+export function splitLines(lines: readonly string[], granularity: Granularity): UnitPiece[] {
+	const pieces: UnitPiece[] = [];
+	let current: UnitPiece | undefined;
+	for (let i = 0; i < lines.length; i++) {
+		const raw = lines[i]!;
+		const trimmed = raw.trim();
+		if (!trimmed) {
+			current = undefined;
 			continue;
 		}
-		const last = Array.from(text.slice(-2)).at(-1) ?? "";
-		const first = Array.from(line.slice(0, 2))[0] ?? "";
-		text += visibleWidth(last) === 2 && visibleWidth(first) === 2 ? line : ` ${line}`;
+		const col = visibleWidth(raw.slice(0, raw.length - raw.trimStart().length));
+		if (!current || granularity === "line") {
+			current = { text: "", spans: [] };
+			pieces.push(current);
+		} else if (needsSpace(current.text, trimmed)) {
+			current.text += " ";
+		}
+		current.spans.push({ line: i, textStart: current.text.length, textEnd: current.text.length + trimmed.length, col });
+		current.text += trimmed;
 	}
-	return text;
+	return pieces;
+}
+
+// Wide (CJK) text wraps without spaces, so no space is inserted between two wide characters.
+function needsSpace(before: string, after: string): boolean {
+	const last = Array.from(before.slice(-2)).at(-1) ?? "";
+	const first = Array.from(after.slice(0, 2))[0] ?? "";
+	return !(visibleWidth(last) === 2 && visibleWidth(first) === 2);
 }
 
 /** Finds the current row of a unit after the transcript may have changed (streaming output, resize). */

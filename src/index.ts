@@ -1,7 +1,8 @@
 // pi-occur: Emacs-style occur for pi's transcript. `/occur [query]` or alt+o lists matching paragraphs; enter jumps.
 
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { type TUI, TuiAltScreen } from "@earendil-works/pi-tui";
+import type { ExtensionAPI, ExtensionContext, KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
+import { isKeyRelease, type Keybinding, type TUI, TuiAltScreen } from "@earendil-works/pi-tui";
+import { TranscriptHighlight } from "./highlight.ts";
 import { OccurView, type OccurSelection } from "./occur-view.ts";
 import { blockLabel, findTranscript, locateUnit, readTranscript, type TranscriptSource } from "./transcript.ts";
 
@@ -11,20 +12,31 @@ const CONTEXT_ROWS = 1;
 /** Registers the `/occur` command and its shortcut. */
 export default function occur(pi: ExtensionAPI): void {
 	let lastQuery = "";
+	// The mark left after a jump; cleared by the next key, the next occur, or shutdown.
+	let lingering: { highlight: TranscriptHighlight; stopListening: () => void } | undefined;
+	const clearLingering = (): void => {
+		lingering?.stopListening();
+		lingering?.highlight.set(undefined);
+		lingering = undefined;
+	};
 
 	const run = async (query: string | undefined, ctx: ExtensionContext): Promise<void> => {
 		if (ctx.mode !== "tui") {
 			ctx.ui.notify("occur needs interactive mode", "error");
 			return;
 		}
+		clearLingering();
 		const contentWidth = (tui: TUI) => {
 			// The transcript ScrollView reserves one column when its scrollbar is always shown.
 			const columns = Math.max(1, tui.terminal.columns);
 			return pi.getSettings().fullscreenScrollbar === "always" && columns > 1 ? columns - 1 : columns;
 		};
 
+		let tuiRef: TUI | undefined;
+		let keys: KeybindingsManager | undefined;
 		let screen: TuiAltScreen | undefined;
 		let source: TranscriptSource | undefined;
+		let highlight: TranscriptHighlight | undefined;
 		let origin: { top: number; following: boolean } | undefined;
 
 		const selection = await ctx.ui.custom<OccurSelection | undefined>(
@@ -35,9 +47,13 @@ export default function occur(pi: ExtensionAPI): void {
 					done(undefined);
 					return { render: () => [], invalidate: () => {} };
 				}
+				tuiRef = tui;
+				keys = keybindings;
 				// `tui` is pi's renderer proxy; its getPrototypeOf trap forwards to the live renderer, so instanceof works.
 				screen = tui instanceof TuiAltScreen ? tui : undefined;
 				if (screen) origin = { top: screen.viewportTop, following: screen.isFollowingOutput };
+				const mark = new TranscriptHighlight(highlightStyle(theme), () => tui.requestRender());
+				highlight = mark;
 				return new OccurView({
 					tui,
 					theme,
@@ -47,7 +63,8 @@ export default function occur(pi: ExtensionAPI): void {
 					initialQuery: query ?? lastQuery,
 					maxRows: () => Math.max(6, Math.floor(tui.terminal.rows * 0.45)),
 					onPreview: (picked) => {
-						if (screen) scrollToRow(screen, picked.unit.row);
+						mark.set(picked && toTarget(picked));
+						if (picked && screen) scrollToRow(screen, picked.unit.row);
 					},
 					done: (picked, finalQuery) => {
 						lastQuery = finalQuery;
@@ -58,21 +75,26 @@ export default function occur(pi: ExtensionAPI): void {
 			{ overlay: true, overlayOptions: { anchor: "bottom-center", width: "100%" } },
 		);
 
-		if (!source) return;
-		if (!screen) {
-			if (selection) ctx.ui.notify(`occur: ${blockLabel(selection.unit.block)}; jumping needs tuiMode "fullscreen"`, "info");
+		if (!source || !highlight || !tuiRef || !keys) return;
+		if (!selection) {
+			highlight.set(undefined);
+			if (origin?.following) screen?.scrollToBottom();
+			else if (origin && screen) scrollTo(screen, origin.top);
 			return;
 		}
-		if (!selection) {
-			if (origin?.following) screen.scrollToBottom();
-			else if (origin) scrollTo(screen, origin.top);
+
+		highlight.set(toTarget(selection));
+		lingering = { highlight, stopListening: clearOnNextKey(tuiRef, keys, clearLingering) };
+		const label = blockLabel(selection.unit.block);
+		if (!screen) {
+			ctx.ui.notify(`occur: ${label}; jumping needs tuiMode "fullscreen"`, "info");
 			return;
 		}
 		// Output may have streamed in or the terminal resized while the list was open; re-read before jumping.
 		const blocks = readTranscript(source, contentWidth(screen));
 		const row = locateUnit(blocks, selection.unit.block.component, selection.unit.index, selection.granularity);
 		scrollToRow(screen, row ?? selection.unit.row);
-		screen.flash(`occur: ${blockLabel(selection.unit.block)}`);
+		screen.flash(`occur: ${label}`);
 	};
 
 	pi.registerCommand("occur", {
@@ -83,6 +105,42 @@ export default function occur(pi: ExtensionAPI): void {
 	pi.registerShortcut("alt+o", {
 		description: "Occur: search the transcript",
 		handler: async (ctx) => run(undefined, ctx),
+	});
+
+	pi.on("session_shutdown", async () => clearLingering());
+}
+
+function toTarget(selection: OccurSelection) {
+	const { unit, granularity, query } = selection;
+	return { component: unit.block.component, index: unit.index, granularity, query };
+}
+
+function highlightStyle(theme: Theme) {
+	return { gutter: theme.fg("accent", "▌"), match: (text: string) => theme.inverse(text) };
+}
+
+// Mouse reports (wheel, clicks) arrive as SGR sequences; scrolling to read the match must not clear it.
+const SGR_MOUSE = /^\x1b\[<\d+;\d+;\d+[Mm]$/;
+
+// Transcript scrolling keeps the mark for the same reason.
+const SCROLL_KEYS: Keybinding[] = [
+	"tui.altScreen.pageUp",
+	"tui.altScreen.pageDown",
+	"tui.altScreen.halfPageUp",
+	"tui.altScreen.halfPageDown",
+	"tui.altScreen.lineUp",
+	"tui.altScreen.lineDown",
+	"tui.altScreen.top",
+	"tui.altScreen.bottom",
+];
+
+/** Calls clear on the next key that is not scrolling, letting the key through; returns a function that stops listening. */
+function clearOnNextKey(tui: TUI, keybindings: KeybindingsManager, clear: () => void): () => void {
+	return tui.addInputListener((data) => {
+		if (SGR_MOUSE.test(data) || isKeyRelease(data)) return undefined;
+		if (SCROLL_KEYS.some((key) => keybindings.matches(data, key))) return undefined;
+		clear();
+		return undefined;
 	});
 }
 

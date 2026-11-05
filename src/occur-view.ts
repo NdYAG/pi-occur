@@ -20,10 +20,11 @@ import {
 	type TranscriptUnit,
 } from "./transcript.ts";
 
-/** What the user picked: enough to find the unit again after the overlay closes. */
+/** What the user picked: enough to find the unit again after the overlay closes, and the query to mark in it. */
 export interface OccurSelection {
 	unit: TranscriptUnit;
 	granularity: Granularity;
+	query: string;
 }
 
 /** Options for one occur interaction. */
@@ -35,7 +36,8 @@ export interface OccurViewOptions {
 	contentWidth: () => number;
 	initialQuery: string;
 	maxRows: () => number;
-	onPreview: (selection: OccurSelection) => void;
+	/** Called when the selected match changes; undefined when nothing matches. */
+	onPreview: (selection: OccurSelection | undefined) => void;
 	/** Called once; query is the input's final text so the next occur can start from it. */
 	done: (selection: OccurSelection | undefined, query: string) => void;
 }
@@ -160,13 +162,16 @@ export class OccurView implements Component, Focusable {
 	}
 
 	private preview(): void {
-		const match = this.matches[this.selected];
-		if (match) this.options.onPreview({ unit: match.unit, granularity: this.granularity });
+		this.options.onPreview(this.selection());
 	}
 
 	private confirm(): void {
+		this.options.done(this.selection(), this.input.getValue());
+	}
+
+	private selection(): OccurSelection | undefined {
 		const match = this.matches[this.selected];
-		this.options.done(match ? { unit: match.unit, granularity: this.granularity } : undefined, this.input.getValue());
+		return match && { unit: match.unit, granularity: this.granularity, query: this.input.getValue() };
 	}
 
 	private listRows(): number {
