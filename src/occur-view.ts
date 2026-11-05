@@ -51,13 +51,16 @@ export interface OccurViewOptions {
 
 const SCOPE_LABEL: Record<Scope, string> = { conversation: "conversation", all: "all messages" };
 
+// The top rule, the input and the bottom rule surround the list.
+const FRAME_ROWS = 3;
+
 /**
  * Overlay component listing matches. up/down move, tab toggles paragraph/line units, the tool-expand key
  * (ctrl+o) toggles the scope between the conversation and all messages, enter jumps.
  */
 export class OccurView implements Component, Focusable {
 	private readonly options: OccurViewOptions;
-	private readonly input = new Input({ prompt: "occur: " });
+	private readonly input = new Input({ prompt: "Occur: " });
 	private granularity: Granularity;
 	private scope: Scope;
 	private blocks: TranscriptBlock[] = [];
@@ -111,36 +114,31 @@ export class OccurView implements Component, Focusable {
 
 	render(width: number): string[] {
 		const { theme, keybindings: kb } = this.options;
-		const inner = Math.max(10, width - 2);
-		const border = (text: string) => theme.fg("borderAccent", text);
-		const row = (text: string) => border("│") + padTo(truncateToWidth(text, inner), inner) + border("│");
+		const rule = (label: string) =>
+			theme.fg("borderAccent", truncateToWidth(`${label ? `── ${label} ` : ""}${"─".repeat(width)}`, width, ""));
+		const lines = [rule(this.statusLabel()), truncateToWidth(this.input.render(width)[0] ?? "", width, "")];
 
-		const count =
-			this.matches.length === 0
-				? theme.fg("muted", this.input.getValue() ? "no matches" : "type to search")
-				: theme.fg("muted", `${this.selected + 1}/${this.matches.length}`);
-		const scope = theme.fg("dim", SCOPE_LABEL[this.scope]);
-		const unit = theme.fg("dim", this.granularity === "paragraph" ? "paragraphs" : "lines");
-		const title = ` occur · ${scope} · ${unit} · ${count} `;
-
-		const lines: string[] = [];
-		lines.push(frame("╭", title, "╮", inner, border));
-		lines.push(row(this.input.render(inner)[0] ?? ""));
-		lines.push(border("├" + "─".repeat(inner) + "┤"));
-
+		// Blank rows keep the height fixed, so the window does not move as the match count changes.
 		const rows = this.listRows();
 		const labelWidth = this.labelWidth();
-		// Blank rows keep the height fixed, so the frame does not move as the match count changes.
 		for (let i = 0; i < rows; i++) {
 			const match = this.matches[this.scroll + i];
-			lines.push(row(match ? this.renderMatch(match, this.scroll + i === this.selected, inner, labelWidth) : ""));
+			lines.push(match ? this.renderMatch(match, this.scroll + i === this.selected, width, labelWidth) : "");
 		}
 
+		// Each toggle shows its key and current state, e.g. "tab (paragraph)".
 		const scopeKey = kb.getKeys("app.tools.expand")[0];
-		const scopeHint = scopeKey ? ` · ${scopeKey} ${this.scope === "conversation" ? "all messages" : "conversation"}` : "";
-		const hint = theme.fg("dim", ` ↑↓ move · enter jump · tab ${this.granularity === "paragraph" ? "lines" : "paragraphs"}${scopeHint} · esc close `);
-		lines.push(frame("╰", hint, "╯", inner, border));
+		const hints = [`tab (${this.granularity})`];
+		if (scopeKey) hints.push(`${scopeKey} (${SCOPE_LABEL[this.scope]})`);
+		hints.push("esc back");
+		lines.push(rule(theme.fg("dim", hints.join(" · "))));
 		return lines;
+	}
+
+	private statusLabel(): string {
+		if (!this.input.getValue()) return "occur";
+		if (this.matches.length === 0) return this.options.theme.fg("warning", "no matches");
+		return `${this.selected + 1}/${this.matches.length} matches`;
 	}
 
 	invalidate(): void {
@@ -203,7 +201,7 @@ export class OccurView implements Component, Focusable {
 	}
 
 	private listRows(): number {
-		return Math.max(1, this.options.maxRows() - 4);
+		return Math.max(1, this.options.maxRows() - FRAME_ROWS);
 	}
 
 	private labelWidth(): number {
@@ -259,12 +257,6 @@ function highlight(
 	}
 	out += plain(text.slice(cursor));
 	return truncateToWidth(out, room, plain("…"));
-}
-
-/** A border line with a label, filled with rules up to the inner width. */
-function frame(left: string, label: string, right: string, inner: number, border: (text: string) => string): string {
-	const text = truncateToWidth(label, inner, "");
-	return border(left) + text + border("─".repeat(Math.max(0, inner - visibleWidth(text)))) + border(right);
 }
 
 function padTo(text: string, width: number): string {

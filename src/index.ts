@@ -119,9 +119,9 @@ export default function occur(pi: ExtensionAPI): void {
 	pi.on("session_shutdown", async () => clearLingering());
 }
 
-/** Total overlay height: frame and input (4 rows) plus the list, capped by the screen share; at least one list row. */
+/** Total overlay height: two rules and the input (3 rows) plus the list, capped by the screen share; at least one list row. */
 function overlayRows(tui: TUI): number {
-	return Math.max(5, Math.min(LIST_ROWS + 4, Math.floor(tui.terminal.rows * MAX_SCREEN_SHARE)));
+	return Math.max(4, Math.min(LIST_ROWS + 3, Math.floor(tui.terminal.rows * MAX_SCREEN_SHARE)));
 }
 
 function toTarget(selection: OccurSelection): HighlightTarget {
