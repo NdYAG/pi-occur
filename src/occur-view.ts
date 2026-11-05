@@ -214,18 +214,28 @@ export class OccurView implements Component, Focusable {
 
 	private renderMatch(match: OccurMatch, selected: boolean, width: number, labelWidth: number): string {
 		const { theme } = this.options;
+		// A match's style ends with a background reset, so the selected row's background goes on each plain piece.
+		const plain = (text: string) => (selected ? theme.bg("selectedBg", text) : text);
 		const marker = selected ? theme.fg("accent", "▶ ") : "  ";
 		const tag = padTo(blockLabel(match.unit.block), labelWidth);
-		const prefix = `${marker}${theme.fg(selected ? "accent" : "muted", tag)} `;
+		const prefix = plain(`${marker}${theme.fg(selected ? "accent" : "muted", tag)} `);
 		const room = Math.max(1, width - visibleWidth(prefix));
-		const snippet = highlight(match, room, (text) => theme.bg("searchMatchBg", theme.fg("searchMatchText", text)));
-		const line = prefix + snippet;
-		return selected ? theme.bold(line) : line;
+		const matchStyle = (text: string) => theme.bg("searchMatchBg", theme.fg("searchMatchText", text));
+		// searchMatchBg falls back to selectedBg, which would hide matches on the selected row; invert them there,
+		// as pi's own search does for its current match.
+		const marked = selected ? (text: string) => theme.inverse(theme.bold(matchStyle(text))) : matchStyle;
+		const snippet = highlight(match, room, plain, marked);
+		return prefix + snippet + plain(" ".repeat(Math.max(0, room - visibleWidth(snippet))));
 	}
 }
 
 /** Shows the text around the first match so it stays visible in a narrow row, with every match highlighted. */
-function highlight(match: OccurMatch, room: number, style: (text: string) => string): string {
+function highlight(
+	match: OccurMatch,
+	room: number,
+	plain: (text: string) => string,
+	marked: (text: string) => string,
+): string {
 	const { text } = match.unit;
 	const [firstStart] = match.ranges[0]!;
 	// Keep about a third of the row as leading context before the first match.
@@ -239,16 +249,16 @@ function highlight(match: OccurMatch, room: number, style: (text: string) => str
 		}
 	}
 
-	let out = start > 0 ? "…" : "";
+	let out = start > 0 ? plain("…") : "";
 	let cursor = start;
 	for (const [from, to] of match.ranges) {
 		if (to <= cursor) continue;
-		out += text.slice(cursor, Math.max(cursor, from));
-		out += style(text.slice(Math.max(cursor, from), to));
+		out += plain(text.slice(cursor, Math.max(cursor, from)));
+		out += marked(text.slice(Math.max(cursor, from), to));
 		cursor = to;
 	}
-	out += text.slice(cursor);
-	return truncateToWidth(out, room);
+	out += plain(text.slice(cursor));
+	return truncateToWidth(out, room, plain("…"));
 }
 
 /** A border line with a label, filled with rules up to the inner width. */
