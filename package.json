@@ -1,6 +1,6 @@
 {
 	"name": "pi-occur",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Emacs occur for the pi transcript: list matching paragraphs, jump to one",
 	"keywords": [
 		"pi-package",
