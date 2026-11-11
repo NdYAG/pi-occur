@@ -34,7 +34,7 @@ pi install ./pi-occur
 | Move, preview | `up` / `down`, `pageUp` / `pageDown` |
 | Jump | `enter` |
 | Conversation or all messages | `ctrl+o` (pi's `app.tools.expand` binding) |
-| Close, restore scroll position | `esc` |
+| Close, restore scroll position | `esc` (pi's `tui.select.cancel` binding) |
 
 ### Change the key
 

@@ -123,10 +123,12 @@ export class OccurView implements Component, Focusable {
 		}
 
 		const scopeKey = kb.getKeys("app.tools.expand")[0];
+		// The Input closes on tui.select.cancel, so the hint names its first key; pi's default spells "escape".
+		const cancelKey = kb.getKeys("tui.select.cancel")[0];
 		// "key (name: value)" names what the key controls, since the scope shows nowhere else.
 		const hints: string[] = [];
 		if (scopeKey) hints.push(`${scopeKey} (scope: ${SCOPE_LABEL[this.scope]})`);
-		hints.push("esc (back)");
+		if (cancelKey) hints.push(`${cancelKey === "escape" ? "esc" : cancelKey} (back)`);
 		lines.push(rule(theme.fg("dim", hints.join(" · "))));
 		return lines;
 	}

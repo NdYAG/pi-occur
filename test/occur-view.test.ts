@@ -9,10 +9,16 @@ const plainTheme = new Proxy({}, { get: () => (_token: string, text?: string) =>
 
 // Only the keys the tests press; enough of KeybindingsManager for the view.
 const keys: Record<string, string> = { "tui.select.down": "\x1b[B", "tui.select.up": "\x1b[A", "app.tools.expand": "\x0f" };
-const keybindings = {
-	matches: (data: string, id: string) => keys[id] === data,
-	getKeys: (id: string) => (id === "app.tools.expand" ? ["ctrl+o"] : []),
-} as unknown as KeybindingsManager;
+const bound: Record<string, string[]> = { "app.tools.expand": ["ctrl+o"], "tui.select.cancel": ["escape", "ctrl+c"] };
+const keybindings = withKeys({});
+
+function withKeys(overrides: Record<string, string[]>): KeybindingsManager {
+	const all = { ...bound, ...overrides };
+	return {
+		matches: (data: string, id: string) => keys[id] === data,
+		getKeys: (id: string) => all[id] ?? [],
+	} as unknown as KeybindingsManager;
+}
 
 function view(chatLines: string[], overrides: Partial<OccurViewOptions> = {}): OccurView {
 	const chat = new Container();
@@ -48,6 +54,13 @@ describe("OccurView", () => {
 		expect.match(v.render(60).at(-1)!, /ctrl\+o \(scope: conversation\) · esc \(back\)/);
 		v.handleInput("\x0f");
 		expect.match(v.render(60).at(-1)!, /ctrl\+o \(scope: all messages\)/);
+	});
+
+	it("names the first tui.select.cancel key as the close key", () => {
+		const footer = (cancel: string[]) =>
+			view([" alpha"], { keybindings: withKeys({ "tui.select.cancel": cancel }) }).render(60).at(-1)!;
+		expect.match(footer(["ctrl+g", "escape"]), /· ctrl\+g \(back\)/);
+		expect.doesNotMatch(footer([]), /\(back\)/);
 	});
 
 	it("puts the cursor after a prefilled query, so typing appends", () => {
