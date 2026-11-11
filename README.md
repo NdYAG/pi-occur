@@ -33,7 +33,7 @@ pi install ./pi-occur
 | Open | `/occur [query]` or `alt+o`, the `occur.open` keybinding (reopens with the last query) |
 | Move, preview | `up` / `down`, `pageUp` / `pageDown` |
 | Jump | `enter` |
-| Copy the selected message | `alt+w`, `super+c` (cmd+c), `ctrl+shift+c`, or pi's `app.message.copy` (`ctrl+x`); the `occur.copy` keybinding |
+| Copy the selected paragraph | `alt+w`, `super+c` (cmd+c), `ctrl+shift+c`, or pi's `app.message.copy` (`ctrl+x`); the `occur.copy` keybinding |
 | Conversation or all messages | `ctrl+o` (pi's `app.tools.expand` binding) |
 | Close, restore scroll position | `esc` |
 
@@ -51,7 +51,7 @@ A list binds several keys, and `[]` binds none, leaving `/occur`. Without the en
 
 ### Copy
 
-Copies the whole selected message, as the Markdown pi was given for user and assistant messages (rendered text for other kinds), through pi's clipboard path. The window stays open. If text is selected with the mouse in the transcript, the key copies that selection instead.
+Copies the selected paragraph from the rendered transcript (no Markdown markers), without the common left indent, through pi's clipboard path. Screen wraps are joined, because they look the same as line breaks and are the common case: a paragraph becomes one line, a list keeps one line per item with its nesting. Code blocks, tables and quotes keep their lines. A deliberate line break inside a paragraph or list item is joined too. The window stays open. If text is selected with the mouse in the transcript, the key copies that selection instead.
 
 `super+c` and `ctrl+shift+c` only arrive when the terminal sends them (kitty keyboard protocol) and does not keep them for its own Copy menu; `alt+w` and `app.message.copy` work everywhere. Bind `occur.copy` in `keybindings.json` like `occur.open` to change the keys; the first one is shown in the window footer.
 

@@ -162,31 +162,30 @@ export function blockLabel(block: TranscriptBlock): string {
 	return block.messageNo === undefined ? block.kind : `#${block.messageNo} ${block.kind}`;
 }
 
-/**
- * The text copied for a message: the Markdown pi was given when the component keeps it (user text, assistant
- * text blocks), else the rendered lines. Reads pi-internal fields, so each is type-checked.
- */
-export function messageText(block: TranscriptBlock, scope: Scope): string {
-	return rawMarkdown(block.component, scope) ?? block.lines.join("\n").replace(/^\n+|\n+$/g, "");
-}
+const LIST_MARKER = /^([-*+]|\d+[.)])\s/;
+// Code fences, table borders and quote bars: layout the line breaks of which are real.
+const KEEP_BREAKS = /^(```|~~~|[┌├└│])/;
 
-function rawMarkdown(component: Component, scope: Scope): string | undefined {
-	if (component instanceof UserMessageComponent) {
-		const { text } = component as unknown as { text?: unknown };
-		return typeof text === "string" && text.trim() ? text.trim() : undefined;
+/**
+ * The text copied for a unit: its rendered lines without the common left indent. The renderer's soft wraps are
+ * joined, since line breaks and wraps look the same on screen and a wrap is the common case: a paragraph becomes
+ * one line, a list keeps one line per item (nesting indent kept). A unit with code, a table or a quote keeps its lines.
+ */
+export function unitText(unit: TranscriptUnit): string {
+	const lines = unit.spans.map((span) => unit.block.lines[span.line] ?? "");
+	const indents = lines.filter((line) => line.trim()).map((line) => line.length - line.trimStart().length);
+	const common = indents.length > 0 ? Math.min(...indents) : 0;
+	const stripped = lines.map((line) => line.slice(common));
+	if (stripped.some((line) => KEEP_BREAKS.test(line.trim()))) return stripped.join("\n");
+
+	const isList = LIST_MARKER.test(stripped[0]?.trim() ?? "");
+	const items: string[] = [];
+	for (const line of stripped) {
+		const text = line.trim();
+		if (items.length === 0 || (isList && LIST_MARKER.test(text))) items.push(line.trimEnd());
+		else items[items.length - 1] += (needsSpace(items.at(-1)!, text) ? " " : "") + text;
 	}
-	if (component instanceof AssistantMessageComponent) {
-		const { lastMessage } = component as unknown as { lastMessage?: { content?: unknown } };
-		if (!Array.isArray(lastMessage?.content)) return undefined;
-		const parts: string[] = [];
-		for (const part of lastMessage.content as Array<Record<string, unknown>>) {
-			if (part?.type === "text" && typeof part.text === "string") parts.push(part.text.trim());
-			else if (scope === "all" && part?.type === "thinking" && typeof part.thinking === "string") parts.push(part.thinking.trim());
-		}
-		const text = parts.filter(Boolean).join("\n\n");
-		return text || undefined;
-	}
-	return undefined;
+	return items.join("\n");
 }
 
 /** Cuts a block into units. Paragraphs are runs of non-blank lines; wrapped lines are joined into one text. */

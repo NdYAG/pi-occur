@@ -18,12 +18,12 @@ import {
 	blockLabel,
 	findTranscript,
 	locateUnit,
-	messageText,
 	readTranscript,
 	type TranscriptSource,
 	transcriptHeight,
 	revealTop,
 	type UnitExtent,
+	unitText,
 	unitExtent,
 } from "./transcript.ts";
 
@@ -166,7 +166,7 @@ function overlayRows(tui: TUI): number {
 	return Math.max(4, Math.min(LIST_ROWS + 3, Math.floor(tui.terminal.rows * MAX_SCREEN_SHARE)));
 }
 
-/** Copies the picked message; a mouse selection in the transcript wins, as with pi's own copy key. */
+/** Copies the picked paragraph as shown; a mouse selection in the transcript wins, as with pi's own copy key. */
 async function copyMessage(picked: OccurSelection, screen: TuiAltScreen | undefined, ctx: ExtensionContext): Promise<void> {
 	const tell = (text: string, level: "info" | "error") => (screen && level === "info" ? screen.flash(text) : ctx.ui.notify(text, level));
 	try {
@@ -174,8 +174,8 @@ async function copyMessage(picked: OccurSelection, screen: TuiAltScreen | undefi
 			await screen.copyActiveSelectionToClipboard();
 			return;
 		}
-		await copyToClipboard(messageText(picked.unit.block, picked.scope));
-		tell(`occur: copied ${blockLabel(picked.unit.block)}`, "info");
+		await copyToClipboard(unitText(picked.unit));
+		tell(`occur: copied paragraph of ${blockLabel(picked.unit.block)}`, "info");
 	} catch (error) {
 		tell(`occur: copy failed: ${error instanceof Error ? error.message : String(error)}`, "error");
 	}

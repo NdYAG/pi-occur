@@ -11,6 +11,7 @@ import {
 	thinkingRanges,
 	revealTop,
 	unitExtent,
+	unitText,
 } from "../src/transcript.ts";
 
 function block(lines: string[], startRow = 10, kind: BlockKind = "assistant", thinking: Array<[number, number]> = []): TranscriptBlock {
@@ -34,6 +35,30 @@ describe("splitUnits", () => {
 		expect.equal(units[0]!.text, "这是一段很长的中文消息");
 	});
 
+});
+
+describe("unitText", () => {
+	const text = (lines: string[]) => splitUnits(block(["", ...lines]), "all").map(unitText);
+
+	it("joins a wrapped paragraph and drops the common indent", () => {
+		expect.deepEqual(text([" The quick brown", " fox jumps", "", " other"]), ["The quick brown fox jumps", "other"]);
+	});
+
+	it("joins wrapped CJK text without a space", () => {
+		expect.deepEqual(text([" 这是一段很长的中", " 文消息"]), ["这是一段很长的中文消息"]);
+	});
+
+	it("keeps one line per list item, joins wrapped items and keeps nesting", () => {
+		expect.deepEqual(text([" - one", " - two wraps", "   here", "   - nested", " 10. ten"]), [
+			"- one\n- two wraps here\n  - nested\n10. ten",
+		]);
+	});
+
+	it("keeps the lines of code, tables and quotes", () => {
+		expect.deepEqual(text([" ```ts", "   const a = 1;", " ```"]), ["```ts\n  const a = 1;\n```"]);
+		expect.deepEqual(text([" ┌───┐", " │ a │", " └───┘"]), ["┌───┐\n│ a │\n└───┘"]);
+		expect.deepEqual(text([" │ quoted", " │ more"]), ["│ quoted\n│ more"]);
+	});
 });
 
 describe("findMatches", () => {

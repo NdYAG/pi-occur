@@ -43,7 +43,7 @@ export interface OccurViewOptions {
 	initial: OccurState;
 	/** Total rows the overlay renders, frame included; the list is padded to fill them. */
 	maxRows: () => number;
-	/** Keys that copy the selected message, besides pi's app.message.copy. */
+	/** Keys that copy the selected paragraph, besides pi's app.message.copy. */
 	copyKeys: readonly KeyId[];
 	/** Called when a copy key is pressed on a match. */
 	onCopy: (selection: OccurSelection) => void;

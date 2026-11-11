@@ -52,7 +52,7 @@ describe("OccurView", () => {
 		expect.match(v.render(60).at(-1)!, /ctrl\+o \(scope: all messages\)/);
 	});
 
-	it("copies the selected message on a copy key, and not into the query", () => {
+	it("copies the selected paragraph on a copy key, and not into the query", () => {
 		const copied: string[] = [];
 		const v = view([" alpha", " beta"], { onCopy: (picked) => copied.push(picked.unit.text) });
 		for (const ch of "alpha") v.handleInput(ch);
