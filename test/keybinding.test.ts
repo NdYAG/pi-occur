@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { isKeyId, readOpenKeys } from "../src/keybinding.ts";
+import { isKeyId, readCopyKeys, readOpenKeys } from "../src/keybinding.ts";
 
 describe("readOpenKeys", () => {
 	let dir = "";
@@ -49,6 +49,19 @@ describe("isKeyId", () => {
 		}
 		for (const key of ["", "Alt+o", "alt+alt+o", "meta+o", "alt+m o", "ctrl+", "f13"]) {
 			expect.equal(isKeyId(key), false, key);
+		}
+	});
+});
+
+describe("readCopyKeys", () => {
+	it("defaults to alt+w, super+c and ctrl+shift+c, and reads occur.copy", () => {
+		const dir = mkdtempSync(join(tmpdir(), "pi-occur-"));
+		try {
+			expect.deepEqual(readCopyKeys(dir), { kind: "default", keys: ["alt+w", "super+c", "ctrl+shift+c"] });
+			writeFileSync(join(dir, "keybindings.json"), JSON.stringify({ "occur.copy": "alt+y" }));
+			expect.deepEqual(readCopyKeys(dir), { kind: "configured", keys: ["alt+y"] });
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
 		}
 	});
 });

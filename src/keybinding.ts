@@ -10,7 +10,13 @@ export const OPEN_KEYBINDING = "occur.open";
 /** The key when keybindings.json does not mention occur.open. */
 export const DEFAULT_OPEN_KEYS: KeyId[] = ["alt+o"];
 
-/** The keys that open occur, and why they are what they are. */
+/** The id that binds the keys copying the selected message. pi's own app.message.copy always works too. */
+export const COPY_KEYBINDING = "occur.copy";
+
+/** alt+w is Emacs' copy; super+c (cmd+c) and ctrl+shift+c reach occur only from terminals that send them (kitty protocol). */
+export const DEFAULT_COPY_KEYS: KeyId[] = ["alt+w", "super+c", "ctrl+shift+c"];
+
+/** The keys bound to an id, and why they are what they are. */
 export type OpenKeys =
 	| { kind: "default"; keys: KeyId[] }
 	| { kind: "configured"; keys: KeyId[] }
@@ -22,29 +28,38 @@ export type OpenKeys =
  * input, the trust boundary here: a missing file or id means the default, a malformed one is reported.
  */
 export function readOpenKeys(agentDir: string): OpenKeys {
+	return readKeys(agentDir, OPEN_KEYBINDING, DEFAULT_OPEN_KEYS);
+}
+
+/** Keys bound to occur.copy; same rules as readOpenKeys. */
+export function readCopyKeys(agentDir: string): OpenKeys {
+	return readKeys(agentDir, COPY_KEYBINDING, DEFAULT_COPY_KEYS);
+}
+
+function readKeys(agentDir: string, id: string, defaults: KeyId[]): OpenKeys {
 	let text: string;
 	try {
 		text = readFileSync(join(agentDir, "keybindings.json"), "utf8");
 	} catch {
-		return { kind: "default", keys: DEFAULT_OPEN_KEYS };
+		return { kind: "default", keys: defaults };
 	}
 	let config: unknown;
 	try {
 		config = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
 	} catch {
-		return { kind: "invalid", keys: DEFAULT_OPEN_KEYS, reason: "keybindings.json is not valid JSON" };
+		return { kind: "invalid", keys: defaults, reason: "keybindings.json is not valid JSON" };
 	}
-	if (typeof config !== "object" || config === null || !(OPEN_KEYBINDING in config)) {
-		return { kind: "default", keys: DEFAULT_OPEN_KEYS };
+	if (typeof config !== "object" || config === null || !(id in config)) {
+		return { kind: "default", keys: defaults };
 	}
-	const value: unknown = (config as Record<string, unknown>)[OPEN_KEYBINDING];
+	const value: unknown = (config as Record<string, unknown>)[id];
 	const keys = typeof value === "string" ? [value] : value;
 	if (!Array.isArray(keys) || !keys.every((key): key is string => typeof key === "string")) {
-		const reason = `"${OPEN_KEYBINDING}" must be a key or a list of keys, such as "alt+o" or ["alt+o"]`;
-		return { kind: "invalid", keys: DEFAULT_OPEN_KEYS, reason };
+		const reason = `"${id}" must be a key or a list of keys, such as "alt+o" or ["alt+o"]`;
+		return { kind: "invalid", keys: defaults, reason };
 	}
 	const bad = keys.find((key) => !isKeyId(key));
-	if (bad !== undefined) return { kind: "invalid", keys: DEFAULT_OPEN_KEYS, reason: `"${bad}" is not a key` };
+	if (bad !== undefined) return { kind: "invalid", keys: defaults, reason: `"${bad}" is not a key` };
 	return { kind: "configured", keys: keys as KeyId[] };
 }
 

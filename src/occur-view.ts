@@ -5,6 +5,8 @@ import {
 	type Component,
 	type Focusable,
 	Input,
+	type KeyId,
+	matchesKey,
 	type TUI,
 	truncateToWidth,
 	visibleWidth,
@@ -41,6 +43,10 @@ export interface OccurViewOptions {
 	initial: OccurState;
 	/** Total rows the overlay renders, frame included; the list is padded to fill them. */
 	maxRows: () => number;
+	/** Keys that copy the selected message, besides pi's app.message.copy. */
+	copyKeys: readonly KeyId[];
+	/** Called when a copy key is pressed on a match. */
+	onCopy: (selection: OccurSelection) => void;
 	/** Called when the selected match changes; undefined when nothing matches. */
 	onPreview: (selection: OccurSelection | undefined) => void;
 	/** Called once, with the final state so the next occur can start from it. */
@@ -95,6 +101,11 @@ export class OccurView implements Component, Focusable {
 		if (kb.matches(data, "tui.select.down")) return this.move(1);
 		if (kb.matches(data, "tui.select.pageUp")) return this.move(-this.listRows());
 		if (kb.matches(data, "tui.select.pageDown")) return this.move(this.listRows());
+		if (kb.matches(data, "app.message.copy") || this.options.copyKeys.some((key) => matchesKey(data, key))) {
+			const selection = this.selection();
+			if (selection) this.options.onCopy(selection);
+			return;
+		}
 		// pi's "show more" key: tool output there, every message kind here.
 		if (kb.matches(data, "app.tools.expand")) {
 			this.scope = this.scope === "conversation" ? "all" : "conversation";
@@ -126,6 +137,8 @@ export class OccurView implements Component, Focusable {
 		// "key (name: value)" names what the key controls, since the scope shows nowhere else.
 		const hints: string[] = [];
 		if (scopeKey) hints.push(`${scopeKey} (scope: ${SCOPE_LABEL[this.scope]})`);
+		const copyKey = this.options.copyKeys[0];
+		if (copyKey) hints.push(`${copyKey} (copy)`);
 		hints.push("esc (back)");
 		lines.push(rule(theme.fg("dim", hints.join(" · "))));
 		return lines;

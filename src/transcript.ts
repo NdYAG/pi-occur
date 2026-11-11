@@ -162,6 +162,33 @@ export function blockLabel(block: TranscriptBlock): string {
 	return block.messageNo === undefined ? block.kind : `#${block.messageNo} ${block.kind}`;
 }
 
+/**
+ * The text copied for a message: the Markdown pi was given when the component keeps it (user text, assistant
+ * text blocks), else the rendered lines. Reads pi-internal fields, so each is type-checked.
+ */
+export function messageText(block: TranscriptBlock, scope: Scope): string {
+	return rawMarkdown(block.component, scope) ?? block.lines.join("\n").replace(/^\n+|\n+$/g, "");
+}
+
+function rawMarkdown(component: Component, scope: Scope): string | undefined {
+	if (component instanceof UserMessageComponent) {
+		const { text } = component as unknown as { text?: unknown };
+		return typeof text === "string" && text.trim() ? text.trim() : undefined;
+	}
+	if (component instanceof AssistantMessageComponent) {
+		const { lastMessage } = component as unknown as { lastMessage?: { content?: unknown } };
+		if (!Array.isArray(lastMessage?.content)) return undefined;
+		const parts: string[] = [];
+		for (const part of lastMessage.content as Array<Record<string, unknown>>) {
+			if (part?.type === "text" && typeof part.text === "string") parts.push(part.text.trim());
+			else if (scope === "all" && part?.type === "thinking" && typeof part.thinking === "string") parts.push(part.thinking.trim());
+		}
+		const text = parts.filter(Boolean).join("\n\n");
+		return text || undefined;
+	}
+	return undefined;
+}
+
 /** Cuts a block into units. Paragraphs are runs of non-blank lines; wrapped lines are joined into one text. */
 export function splitUnits(block: TranscriptBlock, scope: Scope): TranscriptUnit[] {
 	const lines = searchableLines(block.kind, block.lines, block.thinking, scope);

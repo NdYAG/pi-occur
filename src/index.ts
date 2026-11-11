@@ -3,6 +3,7 @@
 // By default it searches the conversation: user messages and assistant replies, without thinking or tool output.
 
 import {
+	copyToClipboard,
 	type ExtensionAPI,
 	type ExtensionContext,
 	getAgentDir,
@@ -11,12 +12,13 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { isKeyRelease, type Keybinding, type TUI, TuiAltScreen } from "@earendil-works/pi-tui";
 import { type HighlightTarget, TranscriptHighlight } from "./highlight.ts";
-import { OPEN_KEYBINDING, readOpenKeys } from "./keybinding.ts";
+import { COPY_KEYBINDING, OPEN_KEYBINDING, readCopyKeys, readOpenKeys } from "./keybinding.ts";
 import { type OccurSelection, type OccurState, OccurView } from "./occur-view.ts";
 import {
 	blockLabel,
 	findTranscript,
 	locateUnit,
+	messageText,
 	readTranscript,
 	type TranscriptSource,
 	transcriptHeight,
@@ -41,6 +43,8 @@ export default function occur(pi: ExtensionAPI): void {
 		lingering?.highlight.set(undefined);
 		lingering = undefined;
 	};
+
+	const copy = readCopyKeys(getAgentDir());
 
 	const run = async (query: string | undefined, ctx: ExtensionContext): Promise<void> => {
 		if (ctx.mode !== "tui") {
@@ -84,6 +88,10 @@ export default function occur(pi: ExtensionAPI): void {
 					contentWidth: () => contentWidth(tui),
 					initial: { ...last, query: query ?? last.query },
 					maxRows: () => overlayRows(tui),
+					copyKeys: copy.keys,
+					onCopy: (picked) => {
+						void copyMessage(picked, screen, ctx);
+					},
 					onPreview: (picked) => {
 						mark.set(picked && toTarget(picked));
 						if (!picked || !screen || !source) return;
@@ -138,10 +146,15 @@ export default function occur(pi: ExtensionAPI): void {
 			handler: async (ctx) => run(undefined, ctx),
 		});
 	}
-	if (open.kind === "invalid") {
-		// Notifications need a UI, which does not exist while extensions load.
+	// Notifications need a UI, which does not exist while extensions load.
+	const invalid = [
+		open.kind === "invalid" && { ...open, id: OPEN_KEYBINDING },
+		copy.kind === "invalid" && { ...copy, id: COPY_KEYBINDING },
+	].filter((entry) => entry !== false);
+	if (invalid.length > 0) {
 		pi.on("session_start", async (_event, ctx) => {
-			if (ctx.hasUI) ctx.ui.notify(`occur: ${open.reason}; using ${open.keys.join(", ")} (${OPEN_KEYBINDING})`, "warning");
+			if (!ctx.hasUI) return;
+			for (const { reason, keys, id } of invalid) ctx.ui.notify(`occur: ${reason}; using ${keys.join(", ")} (${id})`, "warning");
 		});
 	}
 
@@ -151,6 +164,21 @@ export default function occur(pi: ExtensionAPI): void {
 /** Total overlay height: two rules and the input (3 rows) plus the list, capped by the screen share; at least one list row. */
 function overlayRows(tui: TUI): number {
 	return Math.max(4, Math.min(LIST_ROWS + 3, Math.floor(tui.terminal.rows * MAX_SCREEN_SHARE)));
+}
+
+/** Copies the picked message; a mouse selection in the transcript wins, as with pi's own copy key. */
+async function copyMessage(picked: OccurSelection, screen: TuiAltScreen | undefined, ctx: ExtensionContext): Promise<void> {
+	const tell = (text: string, level: "info" | "error") => (screen && level === "info" ? screen.flash(text) : ctx.ui.notify(text, level));
+	try {
+		if (screen?.hasActiveSelection()) {
+			await screen.copyActiveSelectionToClipboard();
+			return;
+		}
+		await copyToClipboard(messageText(picked.unit.block, picked.scope));
+		tell(`occur: copied ${blockLabel(picked.unit.block)}`, "info");
+	} catch (error) {
+		tell(`occur: copy failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+	}
 }
 
 function toTarget(selection: OccurSelection): HighlightTarget {

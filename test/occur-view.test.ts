@@ -8,7 +8,7 @@ import { OccurView, type OccurViewOptions } from "../src/occur-view.ts";
 const plainTheme = new Proxy({}, { get: () => (_token: string, text?: string) => text ?? _token }) as unknown as Theme;
 
 // Only the keys the tests press; enough of KeybindingsManager for the view.
-const keys: Record<string, string> = { "tui.select.down": "\x1b[B", "tui.select.up": "\x1b[A", "app.tools.expand": "\x0f" };
+const keys: Record<string, string> = { "tui.select.down": "\x1b[B", "tui.select.up": "\x1b[A", "app.tools.expand": "\x0f", "app.message.copy": "\x18" };
 const keybindings = {
 	matches: (data: string, id: string) => keys[id] === data,
 	getKeys: (id: string) => (id === "app.tools.expand" ? ["ctrl+o"] : []),
@@ -25,6 +25,8 @@ function view(chatLines: string[], overrides: Partial<OccurViewOptions> = {}): O
 		contentWidth: () => 60,
 		initial: { query: "", scope: "all" },
 		maxRows: () => 8,
+		copyKeys: ["alt+w"],
+		onCopy: () => {},
 		onPreview: () => {},
 		done: () => {},
 		...overrides,
@@ -45,9 +47,19 @@ describe("OccurView", () => {
 
 	it("names the scope and its current value in the footer", () => {
 		const v = view([" alpha"], { initial: { query: "", scope: "conversation" } });
-		expect.match(v.render(60).at(-1)!, /ctrl\+o \(scope: conversation\) · esc \(back\)/);
+		expect.match(v.render(60).at(-1)!, /ctrl\+o \(scope: conversation\) · alt\+w \(copy\) · esc \(back\)/);
 		v.handleInput("\x0f");
 		expect.match(v.render(60).at(-1)!, /ctrl\+o \(scope: all messages\)/);
+	});
+
+	it("copies the selected message on a copy key, and not into the query", () => {
+		const copied: string[] = [];
+		const v = view([" alpha", " beta"], { onCopy: (picked) => copied.push(picked.unit.text) });
+		for (const ch of "alpha") v.handleInput(ch);
+		v.handleInput("\x1bw"); // alt+w
+		v.handleInput("\x18"); // pi's app.message.copy
+		expect.deepEqual(copied, ["alpha", "alpha"]);
+		expect.match(v.render(60)[1]!, /Occur: alpha(?!w)/);
 	});
 
 	it("puts the cursor after a prefilled query, so typing appends", () => {
